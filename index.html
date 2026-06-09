@@ -56,6 +56,11 @@
     </div>
 
     <div class="section">
+      <button class="btn" id="generate" style="width:100%">Generate / Re-break slides</button>
+      <div class="hint">Re-breaking rebuilds all slides from the lyrics box and discards manual edits.</div>
+    </div>
+
+    <div class="section">
       <h3>3. Style</h3>
       <label>Aspect ratio</label>
       <select id="aspect">
@@ -91,6 +96,7 @@
         <button data-v="center" class="active">Center</button>
         <button data-v="right">Right</button>
       </div>
+      <label style="margin-top:8px"><input type="checkbox" id="centerTitle" checked style="width:auto;display:inline;margin-right:6px">Always center-align title slides</label>
 
       <label style="margin-top:10px">Vertical align</label>
       <div class="seg" id="valign">
@@ -105,11 +111,6 @@
         <div><label>BG custom</label><input type="color" id="bgColor" value="#000000" style="height:34px;padding:2px"></div>
         <div><label>Text custom</label><input type="color" id="txtColor" value="#FFFFFF" style="height:34px;padding:2px"></div>
       </div>
-    </div>
-
-    <div class="section">
-      <button class="btn" id="generate" style="width:100%">Generate / Re-break slides</button>
-      <div class="hint">Re-breaking rebuilds all slides from the lyrics box and discards manual edits.</div>
     </div>
   </div>
 
@@ -126,10 +127,24 @@
       <button class="btn-ghost btn-sm" id="helpBtn" title="How to use">? Help</button>
       <span class="pill" id="songTitle">No song loaded</span>
       <span class="count" id="slideCount">0 slides</span>
+      <button class="btn-ghost" id="presentBtn">▶ Present</button>
       <button class="btn" id="export">Export .pptx</button>
     </div>
     <div class="hint" style="margin:-8px 0 12px">Click a slide to select it. Copy/Cut/Paste with Ctrl+C / Ctrl+X / Ctrl+V (⌘ on Mac). Paste drops after the selected slide. Drag any slide by its header to reorder.</div>
     <div id="slides" class="slides"></div>
+  </div>
+</div>
+
+<!-- PRESENT (fullscreen preview) -->
+<div class="present" id="present" style="display:none">
+  <div class="present-stage" id="presentStage">
+    <div class="canvas present-canvas" id="presentCanvas"></div>
+  </div>
+  <div class="present-bar">
+    <button class="present-btn" id="presentPrev" title="Previous (← / ↑)">‹</button>
+    <span class="present-counter" id="presentCounter">1 / 1</span>
+    <button class="present-btn" id="presentNext" title="Next (→ / ↓ / Space)">›</button>
+    <button class="present-btn" id="presentExit" title="Exit (Esc)">✕</button>
   </div>
 </div>
 

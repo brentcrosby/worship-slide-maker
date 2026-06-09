@@ -148,6 +148,12 @@ function styleSnapshot(){
   };
 }
 
+// Title slides are forced to center alignment when the toggle is on, regardless of the slide's halign.
+function effHalign(s){
+  if(s.tag==='Title' && $('#centerTitle').checked) return 'center';
+  return s.halign;
+}
+
 // Measure wrapped-line count using a real font string the browser actually honors.
 let measureCtx = document.createElement('canvas').getContext('2d');
 function estimateRenderedLines(lines, fontLabel, fontSizePt, bold){
@@ -385,7 +391,7 @@ function renderEditor(box){
         </div>
       </div>
       <div class="preview">
-        <div class="canvas" style="aspect-ratio:${cfg.cssRatio};background:${s.bg};color:${s.txt};font-family:${f.css};justify-content:${justify};text-align:${s.halign}">
+        <div class="canvas" style="aspect-ratio:${cfg.cssRatio};background:${s.bg};color:${s.txt};font-family:${f.css};justify-content:${justify};text-align:${effHalign(s)}">
           ${slideCanvasHTML(s,pxSize)}
         </div>
         <div class="edit-area">
@@ -456,7 +462,7 @@ function renderThumbs(box){
         <span class="tag" style="background:${tagColor(s.tag)};color:#0d0f14">${s.tag||'—'}</span>
         <span class="slide-num">#${idx+1}</span>
       </div>
-      <div class="canvas" style="aspect-ratio:${cfg.cssRatio};background:${s.bg};color:${s.txt};font-family:${f.css};justify-content:${justify};text-align:${s.halign}">
+      <div class="canvas" style="aspect-ratio:${cfg.cssRatio};background:${s.bg};color:${s.txt};font-family:${f.css};justify-content:${justify};text-align:${effHalign(s)}">
         ${slideCanvasHTML(s,pxSize)}
       </div>`;
     el.addEventListener('click',()=>selectSlide(s.id));
@@ -512,6 +518,75 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('#helpModal').st
 
 // ---- view toggle ----
 setupSeg('viewMode', v=>{ viewMode=v; render(); });
+
+// ---- present mode (fullscreen click-through preview) ----
+let presenting=false, presentIdx=0;
+function enterPresent(){
+  if(!slides.length){ alert('No slides to present. Generate some first.'); return; }
+  presentIdx=Math.max(0, slides.findIndex(s=>s.id===selectedId));
+  presenting=true;
+  $('#present').style.display='flex';
+  renderPresent();
+  if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }
+}
+function exitPresent(){
+  if(!presenting) return;
+  presenting=false;
+  $('#present').style.display='none';
+  if(document.fullscreenElement && document.exitFullscreen){ document.exitFullscreen().catch(()=>{}); }
+  if(slides[presentIdx]) selectSlide(slides[presentIdx].id);
+}
+function presentGo(delta){ presentSet(presentIdx+delta); }
+function presentSet(i){
+  presentIdx=Math.max(0, Math.min(slides.length-1, i));
+  renderPresent();
+}
+function renderPresent(){
+  const s=slides[presentIdx];
+  if(!s){ exitPresent(); return; }
+  const f=fontByLabel(s.font);
+  const cfg=ASPECTS[s.aspect]||ASPECTS['16:9'];
+  const ratio=cfg.w/cfg.h;
+  // largest box that fits the viewport while keeping the slide's aspect ratio
+  let w=window.innerWidth, h=w/ratio;
+  if(h>window.innerHeight){ h=window.innerHeight; w=h*ratio; }
+  const pxSize=(s.fontSize/(cfg.h*72))*h;
+  const justify = s.valign==='top'?'flex-start':s.valign==='bottom'?'flex-end':'center';
+
+  const stage=$('#presentStage');
+  stage.style.width=w+'px'; stage.style.height=h+'px';
+  const canvas=$('#presentCanvas');
+  canvas.style.background=s.bg; canvas.style.color=s.txt;
+  canvas.style.fontFamily=f.css; canvas.style.justifyContent=justify;
+  canvas.style.textAlign=effHalign(s);
+  canvas.innerHTML=slideCanvasHTML(s,pxSize);
+  $('#presentCounter').textContent=(presentIdx+1)+' / '+slides.length;
+}
+$('#presentBtn').onclick=enterPresent;
+$('#presentExit').onclick=e=>{ e.stopPropagation(); exitPresent(); };
+$('#presentPrev').onclick=e=>{ e.stopPropagation(); presentGo(-1); };
+$('#presentNext').onclick=e=>{ e.stopPropagation(); presentGo(1); };
+// click anywhere on the stage advances (PowerPoint-style); the control bar is exempt
+$('#present').addEventListener('click',e=>{ if(e.target.closest('.present-bar')) return; presentGo(1); });
+window.addEventListener('resize',()=>{ if(presenting) renderPresent(); });
+// leaving browser fullscreen (e.g. Esc) tears down present mode too
+document.addEventListener('fullscreenchange',()=>{ if(presenting && !document.fullscreenElement) exitPresent(); });
+// navigation keys — captured before the editor shortcuts so they don't double-fire
+document.addEventListener('keydown',e=>{
+  if(!presenting) return;
+  switch(e.key){
+    case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ': case 'Enter':
+      e.preventDefault(); presentGo(1); break;
+    case 'ArrowLeft': case 'ArrowUp': case 'PageUp': case 'Backspace':
+      e.preventDefault(); presentGo(-1); break;
+    case 'Home': e.preventDefault(); presentSet(0); break;
+    case 'End': e.preventDefault(); presentSet(slides.length-1); break;
+    case 'Escape': e.preventDefault(); exitPresent(); break;
+  }
+  e.stopImmediatePropagation(); // keep editor shortcuts from firing while presenting
+}, true);
 
 // ---- undo / redo ----
 // Snapshot the slide structure on every render(); the previous snapshot is
@@ -574,6 +649,7 @@ document.addEventListener('keydown',e=>{
   }
 });
 $('#applyStyle').onclick=()=>{ applyStyleToAll(); };
+$('#centerTitle').addEventListener('change', ()=>{ if(slides.length) render(); saveStateSoon(); });
 
 // Apply the current style panel settings to every slide, live.
 function applyStyleToAll(){
@@ -615,7 +691,7 @@ $('#export').onclick=()=>{
       slide.background={color:s.bg.replace('#','')};
       slide.addText(s.lines.join('\n'),{
         x:0.4, y:0.3, w:deckCfg.w-0.8, h:deckCfg.h-0.6,
-        align:s.halign, valign:s.valign,
+        align:effHalign(s), valign:s.valign,
         fontFace:f.ppt, fontSize:s.fontSize, bold:s.bold,
         color:s.txt.replace('#',''),
         lineSpacingMultiple:s.lineSpacing
@@ -650,7 +726,8 @@ function saveState(){
         linesPer:$('#linesPer').value,
         maxDisplay:$('#maxDisplay').value,
         respectSections:$('#respectSections').checked,
-        titleSlide:$('#titleSlide').checked
+        titleSlide:$('#titleSlide').checked,
+        centerTitle:$('#centerTitle').checked
       }
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -684,6 +761,7 @@ function loadState(){
   if(c.maxDisplay) $('#maxDisplay').value=c.maxDisplay;
   if(typeof c.respectSections==='boolean') $('#respectSections').checked=c.respectSections;
   if(typeof c.titleSlide==='boolean') $('#titleSlide').checked=c.titleSlide;
+  if(typeof c.centerTitle==='boolean') $('#centerTitle').checked=c.centerTitle;
 
   slides=state.slides;
   songTitle=state.songTitle||'';
