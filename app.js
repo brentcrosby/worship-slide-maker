@@ -377,6 +377,7 @@ function renderEditor(box){
         <span class="tag" style="background:${tagColor(s.tag)};color:#0d0f14">${s.tag||'Untagged'}</span>
         <span class="slide-num">#${idx+1}</span>
         <div class="slide-actions">
+          <button class="icon-btn" data-act="add" title="Add blank slide below">+</button>
           <button class="icon-btn" data-act="dup">Duplicate</button>
           <button class="icon-btn" data-act="up">↑</button>
           <button class="icon-btn" data-act="down">↓</button>
@@ -424,6 +425,7 @@ function renderEditor(box){
       const i=slides.findIndex(x=>x.id===s.id);
       const act=b.dataset.act;
       if(act==='del') slides.splice(i,1);
+      else if(act==='add'){ const ns={...JSON.parse(JSON.stringify(s)),id:uid++,lines:[''],tag:'Verse'}; slides.splice(i+1,0,ns); selectedId=ns.id; }
       else if(act==='dup') slides.splice(i+1,0,{...JSON.parse(JSON.stringify(s)),id:uid++});
       else if(act==='up'&&i>0){ [slides[i-1],slides[i]]=[slides[i],slides[i-1]]; }
       else if(act==='down'&&i<slides.length-1){ [slides[i+1],slides[i]]=[slides[i],slides[i+1]]; }
