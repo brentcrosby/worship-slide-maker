@@ -121,16 +121,49 @@
         <button data-v="thumbs">Thumbnails</button>
       </div>
       <button class="btn-ghost btn-sm" id="addSlide">+ Blank</button>
-      <button class="btn-ghost btn-sm" id="copyBtn" title="Copy (Ctrl+C)">Copy</button>
-      <button class="btn-ghost btn-sm" id="cutBtn" title="Cut (Ctrl+X)">Cut</button>
-      <button class="btn-ghost btn-sm" id="pasteBtn" title="Paste (Ctrl+V)">Paste</button>
       <button class="btn-ghost btn-sm" id="applyStyle">Apply style to all</button>
+      <button class="btn-ghost btn-sm danger" id="deleteAll">Delete all</button>
+      <button class="btn-ghost btn-sm" id="helpBtn" title="How to use">? Help</button>
       <span class="pill" id="songTitle">No song loaded</span>
       <span class="count" id="slideCount">0 slides</span>
       <button class="btn" id="export">Export .pptx</button>
     </div>
-    <div class="hint" style="margin:-8px 0 12px">Click a slide to select it. Copy/Cut/Paste with the buttons or Ctrl+C / Ctrl+X / Ctrl+V. Paste drops after the selected slide. Drag any slide by its header to reorder.</div>
+    <div class="hint" style="margin:-8px 0 12px">Click a slide to select it. Copy/Cut/Paste with Ctrl+C / Ctrl+X / Ctrl+V (⌘ on Mac). Paste drops after the selected slide. Drag any slide by its header to reorder.</div>
     <div id="slides" class="slides"></div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay" id="helpModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>How to use Worship Slide Maker</h2>
+      <button class="icon-btn" id="helpClose" title="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <h4>1. Add your lyrics</h4>
+      <p>Paste a song into the box on the left, or import a <b>.txt</b> or <b>ChordPro</b> file. Put the song title on the first line, and section labels like <b>Verse 1</b>, <b>Chorus</b>, or <b>Bridge</b> on their own lines — they auto-detect and color-tag.</p>
+
+      <h4>2. Choose how slides break</h4>
+      <p><b>By lyric lines</b> puts a fixed number of lyric lines on each slide. <b>By display lines</b> packs as many lines as fit under a rendered-line cap. Use the checkboxes to keep sections from merging and to build a title slide.</p>
+
+      <h4>3. Style it</h4>
+      <p>Set aspect ratio, font, size, colors, and alignment. Changes apply to every slide live, or click <b>Apply style to all</b>.</p>
+
+      <h4>4. Edit slides</h4>
+      <p>Click a slide to select it. Edit text directly, change its tag, add or duplicate slides, and drag a slide by its header to reorder. <b>Delete all</b> clears every slide at once.</p>
+
+      <h4>Keyboard shortcuts</h4>
+      <ul>
+        <li><b>Ctrl/⌘ + C</b> — copy the selected slide</li>
+        <li><b>Ctrl/⌘ + X</b> — cut the selected slide</li>
+        <li><b>Ctrl/⌘ + V</b> — paste after the selected slide</li>
+        <li><b>Delete / Backspace</b> — delete the selected slide</li>
+      </ul>
+
+      <h4>5. Export</h4>
+      <p>Click <b>Export .pptx</b> to download a PowerPoint file. Your work is saved automatically in this browser.</p>
+    </div>
   </div>
 </div>
 <script src="app.js"></script>

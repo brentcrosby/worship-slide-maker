@@ -23,6 +23,8 @@
   .btn:hover{background:var(--accent2);color:#fff}
   .btn-ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
   .btn-ghost:hover{border-color:var(--accent)}
+  .btn-ghost.danger{color:var(--danger)}
+  .btn-ghost.danger:hover{border-color:var(--danger);background:var(--danger);color:#0d0f14}
   .btn-sm{padding:5px 9px;font-size:12px}
   .swatch-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .swatch{width:30px;height:30px;border-radius:6px;cursor:pointer;border:2px solid transparent}
@@ -69,3 +71,14 @@
   .seg button.active{background:var(--accent);color:#0d0f14;font-weight:600}
   .seg button:not(:last-child){border-right:1px solid var(--line)}
   .mode-body{margin-top:8px}
+
+  /* help modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .modal-head h2{margin:0;font-size:16px}
+  .modal-body{padding:6px 18px 18px;overflow-y:auto}
+  .modal-body h4{margin:16px 0 4px;font-size:13px;color:var(--accent)}
+  .modal-body p{margin:0;color:var(--txt);line-height:1.5;font-size:13px}
+  .modal-body ul{margin:4px 0 0;padding-left:18px;line-height:1.7;font-size:13px}
+  .modal-body b{color:var(--txt)}

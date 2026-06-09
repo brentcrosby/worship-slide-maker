@@ -338,10 +338,10 @@ document.addEventListener('dragend',()=>{
 
 function render(){
   clearDropLines();
+  saveState();
+  commitHistory();
   $('#slideCount').textContent=slides.length+' slide'+(slides.length!==1?'s':'');
   $('#songTitle').textContent=songTitle||'No song loaded';
-  $('#pasteBtn').disabled = !clipboard;
-  $('#pasteBtn').style.opacity = clipboard ? 1 : .45;
 
   const box=$('#slides');
   box.className = viewMode==='thumbs' ? 'thumbs' : 'slides';
@@ -495,12 +495,68 @@ $('#addSlide').onclick=()=>{ const ns={id:uid++,lines:[''],tag:'Verse',...styleS
 function doCopy(){ const s=slides.find(x=>x.id===selectedId); if(s) clipboard=JSON.parse(JSON.stringify(s)); render(); }
 function doCut(){ const i=slides.findIndex(x=>x.id===selectedId); if(i<0)return; clipboard=JSON.parse(JSON.stringify(slides[i])); slides.splice(i,1); selectedId = slides[i]?slides[i].id : (slides[i-1]?slides[i-1].id:null); render(); }
 function doPaste(){ if(!clipboard)return; const copy={...JSON.parse(JSON.stringify(clipboard)),id:uid++}; const i=slides.findIndex(x=>x.id===selectedId); if(i>=0) slides.splice(i+1,0,copy); else slides.push(copy); selectedId=copy.id; render(); }
-$('#copyBtn').onclick=doCopy;
-$('#cutBtn').onclick=doCut;
-$('#pasteBtn').onclick=doPaste;
+
+// ---- delete all ----
+$('#deleteAll').onclick=()=>{
+  if(!slides.length) return;
+  if(!confirm('Delete all '+slides.length+' slide'+(slides.length!==1?'s':'')+'? You can undo with Ctrl/Cmd+Z.')) return;
+  slides=[]; selectedId=null; clipboard=null; songTitle='';
+  render();
+};
+
+// ---- help modal ----
+$('#helpBtn').onclick=()=>{ $('#helpModal').style.display='flex'; };
+$('#helpClose').onclick=()=>{ $('#helpModal').style.display='none'; };
+$('#helpModal').addEventListener('click',e=>{ if(e.target===$('#helpModal')) $('#helpModal').style.display='none'; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('#helpModal').style.display='none'; });
 
 // ---- view toggle ----
 setupSeg('viewMode', v=>{ viewMode=v; render(); });
+
+// ---- undo / redo ----
+// Snapshot the slide structure on every render(); the previous snapshot is
+// pushed onto the undo stack whenever it actually changed. Selection is part of
+// the snapshot so undo restores what was focused, but selection-only changes
+// don't render and so never create spurious history entries.
+let _undo=[], _redo=[], _present=null, _restoring=false;
+const _HIST_MAX=100;
+function histSnapshot(){ return JSON.stringify({slides, songTitle, selectedId, uid}); }
+function commitHistory(){
+  if(_restoring) return;
+  const snap=histSnapshot();
+  if(_present===null){ _present=snap; return; }   // first render: just seed
+  if(snap===_present) return;                      // nothing structural changed
+  _undo.push(_present);
+  if(_undo.length>_HIST_MAX) _undo.shift();
+  _redo.length=0;                                  // new action invalidates redo
+  _present=snap;
+}
+function applyHistory(snap){
+  const s=JSON.parse(snap);
+  slides=s.slides; songTitle=s.songTitle; selectedId=s.selectedId; uid=s.uid;
+  _restoring=true; render(); _restoring=false;
+}
+function undo(){
+  if(!_undo.length) return;
+  _redo.push(_present);
+  _present=_undo.pop();
+  applyHistory(_present);
+}
+function redo(){
+  if(!_redo.length) return;
+  _undo.push(_present);
+  _present=_redo.pop();
+  applyHistory(_present);
+}
+document.addEventListener('keydown',e=>{
+  const mod=e.ctrlKey||e.metaKey;
+  if(!mod) return;
+  const k=e.key.toLowerCase();
+  // While typing in a field, leave Ctrl/Cmd+Z to the browser's native text undo.
+  if(e.target.matches('textarea,input,select')) return;
+  if(k==='z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if(k==='y'){ e.preventDefault(); redo(); }
+});
 
 // ---- keyboard shortcuts (ignore while typing in a field) ----
 document.addEventListener('keydown',e=>{
@@ -574,6 +630,87 @@ $('#export').onclick=()=>{
   }
 };
 
+// ---- local persistence (survives reload) ----
+const STORAGE_KEY = 'worship-slide-maker:v1';
+
+function saveState(){
+  try{
+    const state={
+      lyrics:$('#lyrics').value,
+      slides, songTitle, uid,
+      activeBg, halign, valign, breakMode, viewMode, aspect,
+      controls:{
+        font:$('#font').value,
+        fontSize:$('#fontSize').value,
+        bold:$('#bold').checked,
+        lineSpacing:$('#lineSpacing').value,
+        bgColor:$('#bgColor').value,
+        txtColor:$('#txtColor').value,
+        aspect:$('#aspect').value,
+        linesPer:$('#linesPer').value,
+        maxDisplay:$('#maxDisplay').value,
+        respectSections:$('#respectSections').checked,
+        titleSlide:$('#titleSlide').checked
+      }
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(e){ /* storage full / disabled — fail quietly */ }
+}
+let _saveTimer=null;
+function saveStateSoon(){ clearTimeout(_saveTimer); _saveTimer=setTimeout(saveState,300); }
+
+function syncSeg(id, v){
+  $('#'+id).querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+}
+
+function loadState(){
+  let raw;
+  try{ raw=localStorage.getItem(STORAGE_KEY); }catch(e){ return false; }
+  if(!raw) return false;
+  let state;
+  try{ state=JSON.parse(raw); }catch(e){ return false; }
+  if(!state || !Array.isArray(state.slides) || !state.slides.length) return false;
+
+  const c=state.controls||{};
+  if(state.lyrics!=null) $('#lyrics').value=state.lyrics;
+  if(c.font) $('#font').value=c.font;
+  if(c.fontSize) $('#fontSize').value=c.fontSize;
+  if(typeof c.bold==='boolean') $('#bold').checked=c.bold;
+  if(c.lineSpacing) $('#lineSpacing').value=c.lineSpacing;
+  if(c.bgColor) $('#bgColor').value=c.bgColor;
+  if(c.txtColor) $('#txtColor').value=c.txtColor;
+  if(c.aspect) $('#aspect').value=c.aspect;
+  if(c.linesPer) $('#linesPer').value=c.linesPer;
+  if(c.maxDisplay) $('#maxDisplay').value=c.maxDisplay;
+  if(typeof c.respectSections==='boolean') $('#respectSections').checked=c.respectSections;
+  if(typeof c.titleSlide==='boolean') $('#titleSlide').checked=c.titleSlide;
+
+  slides=state.slides;
+  songTitle=state.songTitle||'';
+  uid=state.uid||1;
+  activeBg=state.activeBg||'#000000';
+  halign=state.halign||'center';
+  valign=state.valign||'middle';
+  breakMode=state.breakMode||'lyric';
+  viewMode=state.viewMode||'editor';
+  aspect=state.aspect||'16:9';
+  // guard against id collisions on future inserts
+  slides.forEach(s=>{ if(typeof s.id==='number' && s.id>=uid) uid=s.id+1; });
+
+  // reflect restored values in the segmented controls + mode panels
+  syncSeg('halign', halign);
+  syncSeg('valign', valign);
+  syncSeg('breakMode', breakMode);
+  syncSeg('viewMode', viewMode);
+  $('#modeLyric').style.display = breakMode==='lyric'?'block':'none';
+  $('#modeDisplay').style.display = breakMode==='display'?'block':'none';
+  return true;
+}
+
+// persist on any control/lyrics edit (render() also saves after slide mutations)
+document.addEventListener('input', saveStateSoon);
+document.addEventListener('change', saveStateSoon);
+
 // seed
 $('#lyrics').value=`And Can It Be (Sagina)
 Verse 1
@@ -587,7 +724,9 @@ Amazing love how can it be
 That Thou my God shouldst die for me`;
 
 buildFontSelect();
-buildBgSwatches();
+const restored = loadState();           // pulls back controls + slides if a prior session was saved
+buildBgSwatches();                      // reads activeBg, so run after loadState
 setupDragReorder();
-if(document.fonts && document.fonts.ready){ document.fonts.ready.then(generate); }
-else generate();
+const start = restored ? render : generate;
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(start); }
+else start();
