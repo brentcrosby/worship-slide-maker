@@ -175,6 +175,52 @@ function estimateRenderedLines(lines, fontLabel, fontSizePt, bold){
   return total;
 }
 
+// Width (pt) of a single string in a given face/size/weight.
+function measureTextPt(text, fontLabel, fontSizePt, bold){
+  const f = fontByLabel(fontLabel);
+  measureCtx.font = (bold?'700 ':'400 ') + fontSizePt + 'px ' + f.css;
+  return measureCtx.measureText(text||'').width;
+}
+// Usable text width (pt) for a slide, honoring its own aspect ratio.
+function slideBoxWidthPt(s){
+  const cfg = ASPECTS[s.aspect] || ASPECTS['16:9'];
+  return (cfg.w - 0.8) * 72;
+}
+// Greedily pack words into lines no wider than maxW.
+function packWithin(words, maxW, fontLabel, fontSizePt, bold){
+  const out=[]; let cur='';
+  for(const w of words){
+    const test = cur ? cur+' '+w : w;
+    if(measureTextPt(test, fontLabel, fontSizePt, bold) > maxW && cur){ out.push(cur); cur=w; }
+    else cur=test;
+  }
+  if(cur) out.push(cur);
+  return out;
+}
+// Split a line into the same number of visual rows it would naturally wrap to,
+// but balanced: we shrink the allowed width to the smallest value that still
+// fits in that row count, which evens out the rows (break lands near the middle
+// instead of after the last word that fit). Returns an array of row strings.
+function balanceWrapLine(line, fontLabel, fontSizePt, bold, maxW){
+  line=(line||'').trim();
+  if(!line) return [''];
+  if(measureTextPt(line, fontLabel, fontSizePt, bold) <= maxW) return [line];
+  const words=line.split(/\s+/);
+  const rows=packWithin(words, maxW, fontLabel, fontSizePt, bold).length;
+  if(rows<=1) return [line];
+  // binary-search the narrowest width that still packs into `rows` rows
+  let lo=0;
+  for(const w of words) lo=Math.max(lo, measureTextPt(w, fontLabel, fontSizePt, bold));
+  let hi=maxW;
+  for(let i=0;i<40 && hi-lo>0.5;i++){
+    const mid=(lo+hi)/2;
+    if(packWithin(words, mid, fontLabel, fontSizePt, bold).length <= rows) hi=mid;
+    else lo=mid;
+  }
+  return packWithin(words, hi, fontLabel, fontSizePt, bold);
+}
+function balanceWrapOn(){ const el=$('#balanceWrap'); return el ? el.checked : false; }
+
 function generate(){
   const raw = $('#lyrics').value.split('\n').map(l=>l.trimEnd());
   let started=false; songTitle='';
@@ -234,7 +280,18 @@ function generate(){
 
 // ---- shared helpers ----
 function slideCanvasHTML(s, pxSize){
-  return s.lines.map(l=>`<div class="ln" style="font-size:${pxSize}px;line-height:${s.lineSpacing};font-weight:${s.bold?700:400}">${escapeHtml(l)||'&nbsp;'}</div>`).join('');
+  const balance = balanceWrapOn();
+  const maxW = balance ? slideBoxWidthPt(s) : 0;
+  return s.lines.map(l=>{
+    let inner;
+    if(balance && l && l.trim()){
+      // Pre-split into balanced rows joined by <br> so CSS won't re-wrap them lopsidedly.
+      inner = balanceWrapLine(l, s.font, s.fontSize, s.bold, maxW).map(escapeHtml).join('<br>');
+    } else {
+      inner = escapeHtml(l)||'&nbsp;';
+    }
+    return `<div class="ln" style="font-size:${pxSize}px;line-height:${s.lineSpacing};font-weight:${s.bold?700:400}">${inner}</div>`;
+  }).join('');
 }
 function moveSlide(fromId, beforeIndex){
   const from=slides.findIndex(x=>x.id===fromId);
@@ -650,6 +707,7 @@ document.addEventListener('keydown',e=>{
 });
 $('#applyStyle').onclick=()=>{ applyStyleToAll(); };
 $('#centerTitle').addEventListener('change', ()=>{ if(slides.length) render(); saveStateSoon(); });
+$('#balanceWrap').addEventListener('change', ()=>{ if(slides.length) render(); saveStateSoon(); });
 
 // Apply the current style panel settings to every slide, live.
 function applyStyleToAll(){
@@ -685,11 +743,17 @@ $('#export').onclick=()=>{
     pptx.layout='A_'+deckAspect.replace(':','_');
     const deckCfg=ASPECTS[deckAspect];
 
+    const balance = balanceWrapOn();
     slides.forEach(s=>{
       const f = fontByLabel(s.font);
       const slide=pptx.addSlide();
       slide.background={color:s.bg.replace('#','')};
-      slide.addText(s.lines.join('\n'),{
+      const text = balance
+        ? s.lines.map(l=> l && l.trim()
+            ? balanceWrapLine(l, s.font, s.fontSize, s.bold, slideBoxWidthPt(s)).join('\n')
+            : l).join('\n')
+        : s.lines.join('\n');
+      slide.addText(text,{
         x:0.4, y:0.3, w:deckCfg.w-0.8, h:deckCfg.h-0.6,
         align:effHalign(s), valign:s.valign,
         fontFace:f.ppt, fontSize:s.fontSize, bold:s.bold,
@@ -727,7 +791,8 @@ function saveState(){
         maxDisplay:$('#maxDisplay').value,
         respectSections:$('#respectSections').checked,
         titleSlide:$('#titleSlide').checked,
-        centerTitle:$('#centerTitle').checked
+        centerTitle:$('#centerTitle').checked,
+        balanceWrap:$('#balanceWrap').checked
       }
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -762,6 +827,7 @@ function loadState(){
   if(typeof c.respectSections==='boolean') $('#respectSections').checked=c.respectSections;
   if(typeof c.titleSlide==='boolean') $('#titleSlide').checked=c.titleSlide;
   if(typeof c.centerTitle==='boolean') $('#centerTitle').checked=c.centerTitle;
+  if(typeof c.balanceWrap==='boolean') $('#balanceWrap').checked=c.balanceWrap;
 
   slides=state.slides;
   songTitle=state.songTitle||'';
