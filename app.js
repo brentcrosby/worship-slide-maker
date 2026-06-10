@@ -43,8 +43,9 @@ let activeBg = '#000000';
 let halign = 'center', valign = 'middle';
 let breakMode = 'lyric';
 let dragId = null;
-let selectedId = null;
-let clipboard = null;
+let selectedId = null;        // anchor slide (last clicked) — used for shift-range + present entry
+let selectedIds = new Set();  // current multi-selection
+let clipboard = null;         // array of slide snapshots
 let viewMode = 'editor';
 let uid = 1;
 
@@ -403,7 +404,7 @@ function render(){
   clearDropLines();
   saveState();
   commitHistory();
-  $('#slideCount').textContent=slides.length+' slide'+(slides.length!==1?'s':'');
+  $('#slideCount').textContent=slides.length+' slide'+(slides.length!==1?'s':'')+(selectedIds.size>1?'  ·  '+selectedIds.size+' selected':'');
   $('#songTitle').textContent=songTitle||'No song loaded';
 
   const box=$('#slides');
@@ -429,7 +430,7 @@ function renderEditor(box){
     const pxSize = Math.max(5, (s.fontSize / (cfg.h*72)) * previewH);
 
     const el=document.createElement('div');
-    el.className='slide'+(s.id===selectedId?' selected':''); el.dataset.id=s.id;
+    el.className='slide'+(selectedIds.has(s.id)?' selected':''); el.dataset.id=s.id;
 
     const tagOpts=Object.keys(TAG_COLORS).map(t=>`<option ${s.tag&&s.tag.startsWith(t)?'selected':''}>${t}</option>`).join('');
     const justify = s.valign==='top'?'flex-start':s.valign==='bottom'?'flex-end':'center';
@@ -464,7 +465,11 @@ function renderEditor(box){
         </div>
       </div>`;
 
-    el.addEventListener('mousedown',ev=>{ if(!ev.target.closest('textarea,select,button')) selectSlide(s.id); });
+    el.addEventListener('mousedown',ev=>{
+      if(ev.target.closest('textarea,select,button')) return;
+      if(ev.shiftKey) ev.preventDefault();   // stop the browser from selecting text on range-click
+      handleSlideClick(s.id, ev);
+    });
 
     el.querySelector('[data-edit]').addEventListener('input',e=>{
       s.lines=e.target.value.split('\n');
@@ -487,8 +492,8 @@ function renderEditor(box){
       e.stopPropagation();
       const i=slides.findIndex(x=>x.id===s.id);
       const act=b.dataset.act;
-      if(act==='del') slides.splice(i,1);
-      else if(act==='add'){ const ns={...JSON.parse(JSON.stringify(s)),id:uid++,lines:[''],tag:'Verse'}; slides.splice(i+1,0,ns); selectedId=ns.id; }
+      if(act==='del'){ selectedIds.delete(s.id); slides.splice(i,1); }
+      else if(act==='add'){ const ns={...JSON.parse(JSON.stringify(s)),id:uid++,lines:[''],tag:'Verse'}; slides.splice(i+1,0,ns); setSelection([ns.id], ns.id); }
       else if(act==='dup') slides.splice(i+1,0,{...JSON.parse(JSON.stringify(s)),id:uid++});
       else if(act==='up'&&i>0){ [slides[i-1],slides[i]]=[slides[i],slides[i-1]]; }
       else if(act==='down'&&i<slides.length-1){ [slides[i+1],slides[i]]=[slides[i],slides[i+1]]; }
@@ -512,7 +517,7 @@ function renderThumbs(box){
     const justify = s.valign==='top'?'flex-start':s.valign==='bottom'?'flex-end':'center';
 
     const el=document.createElement('div');
-    el.className='thumb'+(s.id===selectedId?' selected':''); el.dataset.id=s.id;
+    el.className='thumb'+(selectedIds.has(s.id)?' selected':''); el.dataset.id=s.id;
     el.draggable=true;
     el.innerHTML=`
       <div class="thumb-head">
@@ -522,18 +527,54 @@ function renderThumbs(box){
       <div class="canvas" style="aspect-ratio:${cfg.cssRatio};background:${s.bg};color:${s.txt};font-family:${f.css};justify-content:${justify};text-align:${effHalign(s)}">
         ${slideCanvasHTML(s,pxSize)}
       </div>`;
-    el.addEventListener('click',()=>selectSlide(s.id));
+    el.addEventListener('mousedown',ev=>{ if(ev.shiftKey) ev.preventDefault(); });
+    el.addEventListener('click',ev=>handleSlideClick(s.id, ev));
     el.addEventListener('dragstart',()=>{dragId=s.id; el.classList.add('dragging'); selectSlide(s.id);});
     el.addEventListener('dragend',()=>{el.classList.remove('dragging');});
     box.appendChild(el);
   });
 }
 
-function selectSlide(id){
-  selectedId=id;
+function refreshSelectionUI(){
   document.querySelectorAll('.slide,.thumb').forEach(el=>{
-    el.classList.toggle('selected', el.dataset.id==id);
+    el.classList.toggle('selected', selectedIds.has(Number(el.dataset.id)));
   });
+}
+function setSelection(ids, anchor){
+  selectedIds = new Set(ids);
+  selectedId = anchor!==undefined ? anchor : (ids.length ? ids[ids.length-1] : null);
+  refreshSelectionUI();
+}
+function selectSlide(id){ setSelection([id], id); }
+// Range from the anchor (selectedId) to the clicked slide, in slide order.
+function selectRangeTo(id){
+  const a = slides.findIndex(s=>s.id===selectedId);
+  const b = slides.findIndex(s=>s.id===id);
+  if(a<0 || b<0){ selectSlide(id); return; }
+  const [lo,hi] = a<b ? [a,b] : [b,a];
+  setSelection(slides.slice(lo,hi+1).map(s=>s.id), selectedId);
+}
+function toggleSelect(id){
+  if(selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  selectedId = id;
+  refreshSelectionUI();
+}
+// Shift = extend range from anchor, Ctrl/Cmd = toggle one, plain click = single select.
+function handleSlideClick(id, ev){
+  if(ev.shiftKey) selectRangeTo(id);
+  else if(ev.metaKey || ev.ctrlKey) toggleSelect(id);
+  else selectSlide(id);
+}
+function selectedSlidesInOrder(){ return slides.filter(s=>selectedIds.has(s.id)); }
+// Remove every selected slide, then land selection on the next slide (or previous).
+function removeSelected(){
+  if(!selectedIds.size) return;
+  const firstIdx = slides.findIndex(s=>selectedIds.has(s.id));
+  slides = slides.filter(s=>!selectedIds.has(s.id));
+  const next = slides[firstIdx] || slides[firstIdx-1] || null;
+  setSelection(next?[next.id]:[], next?next.id:null);
+  render();
 }
 
 function escapeHtml(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -552,18 +593,26 @@ $('#fileInput').addEventListener('change',e=>{
   reader.readAsText(file);
   e.target.value=''; // allow re-importing the same file
 });
-$('#addSlide').onclick=()=>{ const ns={id:uid++,lines:[''],tag:'Verse',...styleSnapshot()}; const i=slides.findIndex(x=>x.id===selectedId); if(i>=0) slides.splice(i+1,0,ns); else slides.push(ns); selectedId=ns.id; render(); };
+$('#addSlide').onclick=()=>{ const ns={id:uid++,lines:[''],tag:'Verse',...styleSnapshot()}; const i=slides.findIndex(x=>x.id===selectedId); if(i>=0) slides.splice(i+1,0,ns); else slides.push(ns); setSelection([ns.id], ns.id); render(); };
 
 // ---- clipboard ----
-function doCopy(){ const s=slides.find(x=>x.id===selectedId); if(s) clipboard=JSON.parse(JSON.stringify(s)); render(); }
-function doCut(){ const i=slides.findIndex(x=>x.id===selectedId); if(i<0)return; clipboard=JSON.parse(JSON.stringify(slides[i])); slides.splice(i,1); selectedId = slides[i]?slides[i].id : (slides[i-1]?slides[i-1].id:null); render(); }
-function doPaste(){ if(!clipboard)return; const copy={...JSON.parse(JSON.stringify(clipboard)),id:uid++}; const i=slides.findIndex(x=>x.id===selectedId); if(i>=0) slides.splice(i+1,0,copy); else slides.push(copy); selectedId=copy.id; render(); }
+function doCopy(){ const sel=selectedSlidesInOrder(); if(sel.length) clipboard=JSON.parse(JSON.stringify(sel)); }
+function doCut(){ const sel=selectedSlidesInOrder(); if(!sel.length) return; clipboard=JSON.parse(JSON.stringify(sel)); removeSelected(); }
+function doPaste(){
+  if(!clipboard || !clipboard.length) return;
+  const copies=clipboard.map(c=>({...JSON.parse(JSON.stringify(c)),id:uid++}));
+  // drop after the last selected slide (or at the end if nothing is selected)
+  let i=-1; slides.forEach((s,ix)=>{ if(selectedIds.has(s.id)) i=ix; });
+  if(i>=0) slides.splice(i+1,0,...copies); else slides.push(...copies);
+  setSelection(copies.map(c=>c.id), copies[copies.length-1].id);
+  render();
+}
 
 // ---- delete all ----
 $('#deleteAll').onclick=()=>{
   if(!slides.length) return;
   if(!confirm('Delete all '+slides.length+' slide'+(slides.length!==1?'s':'')+'? You can undo with Ctrl/Cmd+Z.')) return;
-  slides=[]; selectedId=null; clipboard=null; songTitle='';
+  slides=[]; selectedId=null; selectedIds.clear(); clipboard=null; songTitle='';
   render();
 };
 
@@ -652,7 +701,7 @@ document.addEventListener('keydown',e=>{
 // don't render and so never create spurious history entries.
 let _undo=[], _redo=[], _present=null, _restoring=false;
 const _HIST_MAX=100;
-function histSnapshot(){ return JSON.stringify({slides, songTitle, selectedId, uid}); }
+function histSnapshot(){ return JSON.stringify({slides, songTitle, selectedId, selectedIds:[...selectedIds], uid}); }
 function commitHistory(){
   if(_restoring) return;
   const snap=histSnapshot();
@@ -665,7 +714,7 @@ function commitHistory(){
 }
 function applyHistory(snap){
   const s=JSON.parse(snap);
-  slides=s.slides; songTitle=s.songTitle; selectedId=s.selectedId; uid=s.uid;
+  slides=s.slides; songTitle=s.songTitle; selectedId=s.selectedId; selectedIds=new Set(s.selectedIds||[]); uid=s.uid;
   _restoring=true; render(); _restoring=false;
 }
 function undo(){
@@ -694,15 +743,18 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keydown',e=>{
   const typing = e.target.matches('textarea,input,select');
   const mod = e.ctrlKey||e.metaKey;
-  if(mod && !typing && selectedId!==null){
+  if(mod && !typing && selectedIds.size){
     if(e.key==='c'){ e.preventDefault(); doCopy(); }
     else if(e.key==='x'){ e.preventDefault(); doCut(); }
   }
   if(mod && e.key==='v' && !typing){ e.preventDefault(); doPaste(); }
-  if((e.key==='Delete'||e.key==='Backspace') && !typing && selectedId!==null){
+  if(mod && (e.key==='a'||e.key==='A') && !typing && slides.length){
     e.preventDefault();
-    const i=slides.findIndex(x=>x.id===selectedId);
-    if(i>=0){ slides.splice(i,1); selectedId=slides[i]?slides[i].id:(slides[i-1]?slides[i-1].id:null); render(); }
+    setSelection(slides.map(s=>s.id), slides[0].id);
+  }
+  if((e.key==='Delete'||e.key==='Backspace') && !typing && selectedIds.size){
+    e.preventDefault();
+    removeSelected();
   }
 });
 $('#applyStyle').onclick=()=>{ applyStyleToAll(); };

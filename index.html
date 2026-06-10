@@ -131,7 +131,7 @@
       <button class="btn-ghost" id="presentBtn">▶ Present</button>
       <button class="btn" id="export">Export .pptx</button>
     </div>
-    <div class="hint" style="margin:-8px 0 12px">Click a slide to select it. Copy/Cut/Paste with Ctrl+C / Ctrl+X / Ctrl+V (⌘ on Mac). Paste drops after the selected slide. Drag any slide by its header to reorder.</div>
+    <div class="hint" style="margin:-8px 0 12px">Click a slide to select it; <b>Shift+click</b> to select a range, <b>Ctrl/⌘+click</b> to add or remove one. Copy/Cut/Paste/Delete act on the whole selection (Ctrl+C / X / V, ⌘ on Mac). Paste drops after the last selected slide. Drag a slide by its header to reorder.</div>
     <div id="slides" class="slides"></div>
   </div>
 </div>
@@ -169,12 +169,17 @@
       <h4>4. Edit slides</h4>
       <p>Click a slide to select it. Edit text directly, change its tag, add or duplicate slides, and drag a slide by its header to reorder. <b>Delete all</b> clears every slide at once.</p>
 
+      <h4>Selecting multiple slides</h4>
+      <p><b>Shift+click</b> selects every slide between the last one you clicked and the one you click. <b>Ctrl/⌘+click</b> adds or removes a single slide from the selection. Copy, cut, paste, and delete then act on the whole selection at once.</p>
+
       <h4>Keyboard shortcuts</h4>
       <ul>
-        <li><b>Ctrl/⌘ + C</b> — copy the selected slide</li>
-        <li><b>Ctrl/⌘ + X</b> — cut the selected slide</li>
-        <li><b>Ctrl/⌘ + V</b> — paste after the selected slide</li>
-        <li><b>Delete / Backspace</b> — delete the selected slide</li>
+        <li><b>Shift / Ctrl/⌘ + click</b> — select a range / toggle one slide</li>
+        <li><b>Ctrl/⌘ + A</b> — select all slides</li>
+        <li><b>Ctrl/⌘ + C</b> — copy the selected slides</li>
+        <li><b>Ctrl/⌘ + X</b> — cut the selected slides</li>
+        <li><b>Ctrl/⌘ + V</b> — paste after the last selected slide</li>
+        <li><b>Delete / Backspace</b> — delete the selected slides</li>
       </ul>
 
       <h4>5. Export</h4>
