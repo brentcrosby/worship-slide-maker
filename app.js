@@ -813,7 +813,7 @@ $('#export').onclick=()=>{
         lineSpacingMultiple:s.lineSpacing
       });
     });
-    const name=(songTitle||'worship-slides').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-');
+    const name=(songTitle||'lyric-slides').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-');
     pptx.writeFile({fileName:name+'.pptx'}).catch(err=>{
       alert('Export failed: '+err.message);
     });
@@ -823,7 +823,7 @@ $('#export').onclick=()=>{
 };
 
 // ---- local persistence (survives reload) ----
-const STORAGE_KEY = 'worship-slide-maker:v1';
+const STORAGE_KEY = 'lyric-slide-maker:v1';
 
 function saveState(){
   try{
@@ -908,16 +908,12 @@ document.addEventListener('input', saveStateSoon);
 document.addEventListener('change', saveStateSoon);
 
 // seed
-$('#lyrics').value=`And Can It Be (Sagina)
+$('#lyrics').value=`Amazing Grace
 Verse 1
-And can it be that I should gain
-An interest in the Savior's blood
-Died He for me who caused His pain
-For me who Him to death pursued
-Amazing love how can it be
-That Thou my God shouldst die for me
-Amazing love how can it be
-That Thou my God shouldst die for me`;
+Amazing grace, how sweet the sound
+That saved a wretch like me
+I once was lost, but now am found
+Was blind, but now I see`;
 
 buildFontSelect();
 const restored = loadState();           // pulls back controls + slides if a prior session was saved
